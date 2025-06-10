@@ -27,21 +27,10 @@ def get_available_hosts():
         print(f"获取服务器列表时出错: {e}")
         return []
 
-def monitor_memory(host_name, log_file, sim_cmd):
+def monitor_memory(job_id, log_file):
     """监控服务器内存使用情况"""
     try:
-        # 获取bsub job id
-        job_id = None
-        bjobs_cmd = ['bjobs', '-l']
-        bjobs_result = subprocess.run(bjobs_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-        if bjobs_result.returncode == 0:
-            for line in bjobs_result.stdout.split('\n'):
-                job_id_match = re.search(r'Job <(\d+)>', line)
-                if job_id_match:
-                    job_id = job_id_match.group(1)
-                    break
-
-        # 获取指定job的内存使用情况
+        # 直接使用传入的job_id
         if job_id:
             mem_cmd = ['bjobs', '-l', job_id]
             mem_result = subprocess.run(mem_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
@@ -73,19 +62,28 @@ def run_simulation(host_name, simulation_command):
     log_file = f"simulation_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     
     # 开始仿真
-    sim_process = subprocess.Popen(simulation_command, shell=True)
+    sim_process = subprocess.Popen(simulation_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    output, error = sim_process.communicate()
     
+    # 从输出中提取job ID
+    job_id_match = re.search(r'Job <(\d+)>', output)
+    if job_id_match:
+        job_id = job_id_match.group(1)
+        print(f"获取到Job ID: {job_id}")
+    else:
+        print("未能获取Job ID")
+        job_id = None
     # 每10分钟监控一次内存
     try:
         while sim_process.poll() is None:
-            monitor_memory(host_name, log_file, ' '.join(simulation_command))
+            monitor_memory(job_id, log_file)
             time.sleep(600)  # 等待10分钟
     except KeyboardInterrupt:
         print("用户中断仿真")
         sim_process.terminate()
     
     # 仿真结束后再次记录内存状态
-    monitor_memory(host_name, log_file, ' '.join(simulation_command))
+    monitor_memory(job_id, log_file)
     print(f"仿真完成，日志文件保存在: {log_file}")
 
 def main():
