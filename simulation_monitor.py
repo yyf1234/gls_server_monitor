@@ -100,6 +100,14 @@ def main():
     # 定义仿真命令
     simulation_command = sys.argv[1].replace("\\","")
     
+    # 检查命令中是否包含 -m 选项
+    if "-m" in simulation_command:
+        # 如果包含 -m 选项，替换主机名
+        simulation_command = re.sub(r'-m\s+\S+', f'-m {selected_host}', simulation_command)
+    else:
+        # 如果不包含 -m 选项，在 bjob 后添加
+        simulation_command = simulation_command.replace("bsub", f"bsub -m {selected_host}")
+    
     # 运行仿真
     run_simulation(selected_host, simulation_command)
 
