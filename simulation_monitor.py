@@ -27,6 +27,24 @@ def get_available_hosts():
         print(f"获取服务器列表时出错: {e}")
         return []
 
+def log_file_info(file_path, log_file):
+    """记录文件路径、创建时间和最终修改时间到日志"""
+    try:
+        if file_path:
+            try:
+                create_time = os.path.getctime(file_path)
+                modify_time = os.path.getmtime(file_path)
+                create_time_str = datetime.fromtimestamp(create_time).strftime("%Y-%m-%d %H:%M:%S")
+                modify_time_str = datetime.fromtimestamp(modify_time).strftime("%Y-%m-%d %H:%M:%S")
+                file_info = f"文件路径: {file_path}\n文件创建时间: {create_time_str}\n文件最终修改时间: {modify_time_str}\n"
+            except Exception as fe:
+                file_info = f"文件路径: {file_path}\n文件信息获取失败: {fe}\n"
+            with open(log_file, 'a') as f:
+                f.write(f"\n=== 文件信息 ===\n")
+                f.write(file_info)
+    except Exception as e:
+        print(f"记录文件信息时出错: {e}")
+
 def monitor_memory(job_id, log_file):
     """监控服务器内存使用情况"""
     try:
@@ -57,12 +75,12 @@ def monitor_memory(job_id, log_file):
     except Exception as e:
         print(f"监控内存时出错: {e}")
 
-def run_simulation(host_name, simulation_command):
+def run_simulation(host_name, simulation_command, file_path=None):
     """运行仿真任务"""
     log_file = f"simulation_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     
     # 开始仿真
-    sim_process = subprocess.Popen(simulation_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    sim_process = subprocess.Popen(f"{simulation_command} | tee /dev/tty", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     output, error = sim_process.communicate()
     
     # 从输出中提取job ID
@@ -82,7 +100,8 @@ def run_simulation(host_name, simulation_command):
         print("用户中断仿真")
         sim_process.terminate()
     
-    # 仿真结束后再次记录内存状态
+    # 仿真结束后记录文件信息和内存状态
+    log_file_info(file_path, log_file)
     monitor_memory(job_id, log_file)
     print(f"仿真完成，日志文件保存在: {log_file}")
 
@@ -97,19 +116,23 @@ def main():
     selected_host = available_hosts[0]
     print(f"选择服务器: {selected_host}")
     
-    # 定义仿真命令
+    # 解析命令行参数
+    if len(sys.argv) < 3:
+        print("用法: python simulation_monitor.py <仿真命令> <需要检测的文件路径>")
+        return
     simulation_command = sys.argv[1].replace("\\","")
+    file_path = sys.argv[2]
     
     # 检查命令中是否包含 -m 选项
     if "-m" in simulation_command:
         # 如果包含 -m 选项，替换主机名
         simulation_command = re.sub(r'-m\s+\S+', f'-m {selected_host}', simulation_command)
     else:
-        # 如果不包含 -m 选项，在 bjob 后添加
+        # 如果不包含 -m 选项，在 bsub 后添加
         simulation_command = simulation_command.replace("bsub", f"bsub -m {selected_host}")
     
     # 运行仿真
-    run_simulation(selected_host, simulation_command)
+    run_simulation(selected_host, simulation_command, file_path)
 
 if __name__ == "__main__":
     main() 
